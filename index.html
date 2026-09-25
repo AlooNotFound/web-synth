@@ -10,10 +10,20 @@
         <h1>WEB Synthesizer</h1>
         <p>welcome to the WEB Synthesizer! Cook sound in web.</p>
         <p>use the controls below to adjust the parameters of the synthesizer.</p>
+        <div class="instruments">
+            <button data-instrument="synth">Synth</button>
+            <button data-instrument="guitar">Guitar</button>
+        </div>
         <div id="envelopes">
             <button data-envelope="piano">Piano</button>
             <button data-envelope="pad">Pad</button>
             <button data-envelope="organ">Organ</button>
+        </div>
+        <div id="waveforms">
+            <button data-waveform="sine">Sine</button>
+            <button data-waveform="square">Square</button>
+            <button data-waveform="sawtooth">Sawtooth</button>
+            <button data-waveform="triangle">Triangle</button>
         </div>
         <div id="synth-controls"></div>
     </main>

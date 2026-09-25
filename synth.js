@@ -28,15 +28,36 @@ const envelopes = {
     }
 }
 
+const waveforms = {
+    sine: 'sine',
+    square: 'square',
+    sawtooth: 'sawtooth',
+    triangle: 'triangle'
+}
+
+let waveform = waveforms.sine;
+
 let envelope = envelopes.piano;
 
 const vol = 0.2;
+
+const instruments = {
+    synth: {
+        down, up
+    },
+    guitar: {
+        down: guitar,
+        up: guitarUp
+    }
+}
+
+let instrument = instruments.synth;
 
 function play(freq) {
     let osc = aud.createOscillator();
     let gain = aud.createGain();
     osc.frequency.value = freq;
-    osc.type = 'sine';
+    osc.type = waveform;
     gain.gain.value = 0.2;
     osc.connect(gain);
     gain.connect(aud.destination);
@@ -50,7 +71,7 @@ function down(k){
     let osc = aud.createOscillator();
     let gain = aud.createGain();
     osc.frequency.value = freq(notes[k]);
-    osc.type = 'square';
+    osc.type = waveform;
     // gain.gain.value = 0.2;
     osc.connect(gain);
     gain.connect(aud.destination);
@@ -90,33 +111,39 @@ for (let k in notes) {
 
 mousedown = e => {
     let k = e.target.textContent.toLowerCase();
-    if(notes[k]&&!e.repeat)down(k);
+    if(notes[k] !== undefined && !e.repeat)instrument.down(k);
 }
 
 mouseup = e => {
     let k = e.target.textContent.toLowerCase();
-    if(notes[k])up(k);
+    if(notes[k])instrument.up(k);
 }
 
 mouseleave = e => {
     let k = e.target.textContent.toLowerCase();
-    up(k);
+    instrument.up(k);
 }
 
 document.addEventListener('keydown', e => {
     let k = e.key.toLowerCase();
-    if (notes[k] && !pressedKeys.has(k)) {
+    if (notes[k] !== undefined && !pressedKeys.has(k)) {
         pressedKeys.add(k);
-        down(k);
+        instrument.down(k);
     }
 });
 
 document.addEventListener('keyup', e => {
     let k = e.key.toLowerCase();
-    if (notes[k]) {
+    if (notes[k] !== undefined) {
         pressedKeys.delete(k);
-        up(k);
+        instrument.up(k);
     }
+});
+
+document.querySelectorAll("[data-instrument]").forEach(b => {
+    b.addEventListener('click', e => {
+        instrument = instruments[e.target.dataset.instrument];
+    });
 });
 
 document.querySelectorAll("[data-envelope]").forEach(b => {
@@ -125,6 +152,67 @@ document.querySelectorAll("[data-envelope]").forEach(b => {
     });
 });
 
+document.querySelectorAll("[data-waveform]").forEach(b => {
+    b.addEventListener('click', e => {
+        waveform = waveforms[e.target.dataset.waveform];
+    });
+});
+
 function freq(n){
     return 440*2**((n-69)/12);
+}
+
+function kstrong(freq, dur = 3, decay = 0.996, damp = 0.5) {
+    const smplRate = aud.smplRate;
+    const buffSize = Math.floor(smplRate * dur);
+    const buff = aud.createBuffer(1, buffSize, smplRate);
+    const data = buff.getChannelData(0);
+    const N = Math.max(2, Math.round(smplRate/freq));
+    const ring = new Float32Array(N);
+    for (let i = 0; i< N; i++) {
+        ring[i] = Math.random() * 2 -1;
+    }
+    let idx = 0;
+    for (let i = 0; i < buffSize; i++) {
+        const curr = ring[idx];
+        const nxt = ring[(idx + 1) % N];
+        const newVal = decay * (damp * curr + (1 - damp) * nxt);
+        data[i] = curr;
+        ring[idx] = newVal;
+        idx = (idx + 1) % N;
+    }
+    return buff;
+}
+
+function guitar(k) {
+    if (voices.has(k)) return;
+    if (aud.state === "suspended") aud.resume();
+    const f = freq(notes[k]);
+    const buff = kstrong(f);
+    const src = aud.createBufferSource();
+    src.buffer = buff;
+    const filter = aud.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 8000;
+    const gain = aud.createGain();
+    const now = aud.currentTime;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(vol, now + 0.003);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(aud.destination);
+    src.start();
+    voices.set(k, { src, gain });
+}
+
+function guitarUp(k) {
+  const x = voices.get(k);
+  if (x) {
+    const now = aud.currentTime;
+    x.gain.gain.cancelScheduledValues(now);
+    x.gain.gain.setValueAtTime(x.gain.gain.value, now);
+    x.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+    x.src.stop(now + 0.3);
+    voices.delete(k);
+  }
 }
